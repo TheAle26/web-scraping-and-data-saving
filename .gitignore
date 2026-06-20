@@ -1,0 +1,5 @@
+# .gitignore
+*.db
+env/
+__pycache__/
+playwright-log/
