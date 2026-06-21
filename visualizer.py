@@ -9,7 +9,7 @@ st.title("📊 Monitor de Precios e Inflación")
 
 # --- 1. Menú Principal: Elegir Tienda ---
 st.sidebar.header("Configuración")
-tienda_seleccionada = st.sidebar.radio("Seleccionar Tienda:", ["Duvet Home", "Mercado Libre"])
+tienda_seleccionada = st.sidebar.radio("Seleccionar Tienda:", ["Duvet Home", "Mercado Libre", "Calm"])
 
 # --- LÓGICA PARA DUVET HOME ---
 if tienda_seleccionada == "Duvet Home":
@@ -51,7 +51,7 @@ elif tienda_seleccionada == "Mercado Libre":
         if not df.empty:
             df['date_scraped'] = pd.to_datetime(df['date_scraped'])
             
-            # Filtros Mercado Libre (No hay "Tamaño" acá)
+            # Filtros Mercado Libre
             st.sidebar.subheader("Filtros Mercado Libre")
             productos = st.sidebar.multiselect("Producto", df['product_name'].unique().tolist(), default=[])
             if not productos: productos = df['product_name'].unique().tolist()
@@ -76,3 +76,37 @@ elif tienda_seleccionada == "Mercado Libre":
             st.info("La base de datos de Mercado Libre está vacía.")
     except sqlite3.OperationalError:
         st.error("No se encontró la base de datos 'mercadolibre_prices.db'.")
+
+# --- LÓGICA PARA CALM ---
+elif tienda_seleccionada == "Calm":
+    try:
+        conn = sqlite3.connect('calm_prices.db')
+        df = pd.read_sql_query("SELECT * FROM calm_price_history", conn)
+        conn.close()
+        
+        if not df.empty:
+            df['date_scraped'] = pd.to_datetime(df['date_scraped'])
+            df['Leyenda'] = df['product_name'] + ' (' + df['size'] + ')'
+            
+            # Filtros Calm en cascada
+            st.sidebar.subheader("Filtros Calm")
+            
+            tipos = st.sidebar.multiselect("Tipo de Núcleo", df['mattress_type'].unique().tolist(), default=[])
+            if not tipos: tipos = df['mattress_type'].unique().tolist()
+            
+            tamanos = st.sidebar.multiselect("Tamaño", df[df['mattress_type'].isin(tipos)]['size'].unique().tolist(), default=[])
+            if not tamanos: tamanos = df['size'].unique().tolist()
+            
+            productos = st.sidebar.multiselect("Producto", df[(df['mattress_type'].isin(tipos)) & (df['size'].isin(tamanos))]['product_name'].unique().tolist(), default=[])
+            if not productos: productos = df['product_name'].unique().tolist()
+            
+            datos_filtrados = df[(df['mattress_type'].isin(tipos)) & (df['size'].isin(tamanos)) & (df['product_name'].isin(productos))].sort_values('date_scraped')
+            
+            st.subheader(f"Evolución en {tienda_seleccionada}")
+            fig = px.line(datos_filtrados, x='date_scraped', y='price', color='Leyenda', markers=True)
+            fig.update_layout(yaxis_tickformat="$,.0f", yaxis_title="Precio de Venta (ARS)")
+            st.plotly_chart(fig, use_container_width=True)
+        else:
+            st.info("La base de datos de Calm está vacía.")
+    except sqlite3.OperationalError:
+        st.error("No se encontró la base de datos 'calm_prices.db'.")
